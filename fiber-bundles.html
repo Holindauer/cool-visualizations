@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiber Bundles — an interactive atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<style>
+  :root{
+    --ink:#0b1020;
+    --panel:rgba(15,19,36,0.92);
+    --panel-edge:rgba(159,180,255,0.14);
+    --text:#e9ecf8;
+    --muted:#9aa3c0;
+    --accent:#9fb4ff;
+    --mint:#7fe0c3;
+    --warn:#ffb480;
+    --mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Instrument Sans',system-ui,sans-serif;
+    overflow:hidden;
+  }
+  #stage{position:fixed;inset:0;}
+  #main-canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab;}
+  #main-canvas:active{cursor:grabbing;}
+
+  /* ---------- sidebar ---------- */
+  #panel{
+    position:fixed;top:16px;left:16px;bottom:16px;width:380px;
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    border-radius:14px;
+    backdrop-filter:blur(14px);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+    z-index:10;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1);
+  }
+  #panel.hidden{transform:translateX(calc(-100% - 24px));}
+  #panel-head{padding:20px 22px 14px;border-bottom:1px solid var(--panel-edge);}
+  h1{
+    font-family:'Fraunces',serif;font-weight:500;font-size:26px;letter-spacing:.2px;
+    line-height:1.15;
+  }
+  h1 .thin{font-weight:300;color:var(--muted);}
+  #tabs{display:flex;gap:8px;margin-top:14px;}
+  .tab{
+    flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--panel-edge);
+    background:transparent;color:var(--muted);font-family:inherit;font-size:13px;font-weight:600;
+    cursor:pointer;transition:all .18s;
+  }
+  .tab:hover{color:var(--text);border-color:rgba(159,180,255,.4);}
+  .tab.active{background:rgba(159,180,255,.14);color:var(--accent);border-color:rgba(159,180,255,.5);}
+  #panel-body{padding:18px 22px 26px;overflow-y:auto;flex:1;}
+  #panel-body::-webkit-scrollbar{width:8px}
+  #panel-body::-webkit-scrollbar-thumb{background:rgba(159,180,255,.18);border-radius:4px}
+  .prose{font-size:14px;line-height:1.6;color:#c6cce4;}
+  .prose p{margin-bottom:10px;}
+  .prose .katex{font-size:1em;}
+  .kicker{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--mint);margin:18px 0 8px;
+  }
+  .kicker:first-child{margin-top:2px;}
+  .callout{
+    border-left:2px solid var(--mint);padding:8px 12px;margin:10px 0;
+    background:rgba(127,224,195,.06);border-radius:0 8px 8px 0;font-size:13.5px;line-height:1.55;color:#cfd6ee;
+  }
+
+  /* ---------- controls ---------- */
+  .ctl{margin-top:12px;}
+  .ctl-row{display:flex;align-items:center;gap:10px;margin:9px 0;}
+  .ctl-row label{font-size:13px;color:var(--muted);flex:0 0 118px;}
+  .ctl-row .val{font-family:var(--mono);font-size:12px;color:var(--accent);flex:0 0 58px;text-align:right;}
+  input[type=range]{
+    flex:1;-webkit-appearance:none;height:3px;border-radius:2px;
+    background:rgba(159,180,255,.25);outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid #0b1020;
+    box-shadow:0 0 0 1px rgba(159,180,255,.5);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px;height:13px;border-radius:50%;background:var(--accent);
+    cursor:pointer;border:2px solid #0b1020;
+  }
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px;}
+  button.act{
+    padding:8px 13px;border-radius:8px;border:1px solid rgba(159,180,255,.35);
+    background:rgba(159,180,255,.10);color:var(--text);
+    font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;
+  }
+  button.act:hover{background:rgba(159,180,255,.22);}
+  button.act.primary{background:var(--accent);color:#0b1020;border-color:var(--accent);}
+  button.act.primary:hover{background:#b7c6ff;}
+  button.act.ghost{background:transparent;color:var(--muted);}
+  button.act.ghost:hover{color:var(--text);}
+  .toggle-row{display:flex;align-items:center;gap:9px;margin:8px 0;font-size:13px;color:var(--muted);cursor:pointer;user-select:none;}
+  .toggle-row input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer;}
+  #transport-status{
+    font-family:var(--mono);font-size:12px;min-height:34px;margin-top:8px;color:var(--warn);line-height:1.5;
+  }
+
+  /* ---------- inset base sphere ---------- */
+  #inset-wrap{
+    position:fixed;right:18px;bottom:18px;z-index:9;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  #inset-canvas{
+    width:200px;height:200px;border-radius:14px;
+    background:radial-gradient(circle at 35% 30%, rgba(30,38,70,.95), rgba(10,13,26,.95));
+    border:1px solid var(--panel-edge);cursor:crosshair;touch-action:none;
+  }
+  #inset-label{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  }
+  #panel-toggle{
+    position:fixed;top:24px;left:16px;z-index:11;display:none;
+    width:38px;height:38px;border-radius:10px;border:1px solid var(--panel-edge);
+    background:var(--panel);color:var(--accent);font-size:18px;cursor:pointer;
+  }
+  #panel.hidden ~ #panel-toggle{display:block;}
+  #hint{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:rgba(154,163,192,.75);
+    pointer-events:none;z-index:5;text-transform:uppercase;
+  }
+  @media (max-width:860px){
+    #panel{width:min(92vw,380px);}
+    #inset-canvas{width:150px;height:150px;}
+    #hint{display:none;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #panel{transition:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="main-canvas"></canvas></div>
+
+<div id="panel">
+  <div id="panel-head">
+    <h1>Fiber Bundles<br><span class="thin">an interactive atlas</span></h1>
+    <div id="tabs">
+      <button class="tab active" data-scene="hopf">Hopf fibration</button>
+      <button class="tab" data-scene="mobius">Möbius band</button>
+    </div>
+  </div>
+  <div id="panel-body">
+
+    <div class="prose" id="intro">
+      <p>A <b>fiber bundle</b> is a space $E$ that locally looks like a product but may be globally twisted. Formally, it is a surjection $\pi:E\to B$ such that every point of the base $B$ has a neighborhood $U$ with a homeomorphism</p>
+      <p style="text-align:center">$\pi^{-1}(U)\;\cong\;U\times F$</p>
+      <p>commuting with projection to $U$. The preimage $\pi^{-1}(b)\cong F$ of a point is the <b>fiber</b> over $b$. Every bundle is assembled from trivial pieces $U\times F$; the interesting data is <i>how the pieces are glued</i> — the transition functions, valued in a structure group $G$ acting on $F$.</p>
+    </div>
+
+    <!-- ================= HOPF ================= -->
+    <div id="hopf-ui">
+      <div class="kicker">The bundle $S^1 \hookrightarrow S^3 \xrightarrow{\ \pi\ } S^2$</div>
+      <div class="prose">
+        <p>The Hopf map sends $(z_1,z_2)\in S^3\subset\mathbb{C}^2$ to $[z_1:z_2]\in\mathbb{CP}^1\cong S^2$. The fiber over each base point is a circle — the $U(1)$-orbit $(e^{it}z_1,\,e^{it}z_2)$ — and $S^3$ is the total space of a <i>nontrivial</i> principal $U(1)$-bundle: $S^3\not\cong S^2\times S^1$ (compare $\pi_1$).</p>
+        <p>What you see is $S^3$ stereographically projected to $\mathbb{R}^3$. Each circle is one fiber; every two fibers are linked (Hopf link, linking number $=$ the Euler class, $1$). Fibers over a circle of latitude sweep out a torus.</p>
+      </div>
+      <div class="callout">
+        <b>Paint the base.</b> Click or drag on the small sphere (bottom right) — that sphere <i>is</i> the base $S^2$. Each point you touch grows its fiber in the big view. Hue encodes longitude, brightness encodes latitude.
+      </div>
+      <div class="ctl">
+        <div class="kicker">Presets</div>
+        <div class="btns">
+          <button class="act primary" id="btn-sweep">Latitude sweep</button>
+          <button class="act" id="btn-ring">Ring at θ</button>
+          <button class="act" id="btn-great">Meridian circle</button>
+          <button class="act ghost" id="btn-undo">Undo</button>
+          <button class="act ghost" id="btn-clear">Clear</button>
+        </div>
+        <div class="ctl-row">
+          <label>Ring latitude θ</label>
+          <input type="range" id="ring-theta" min="0.12" max="2.7" step="0.01" value="1.1">
+          <span class="val" id="ring-theta-val">1.10</span>
+        </div>
+        <div class="ctl-row">
+          <label>Fibers per ring</label>
+          <input type="range" id="ring-n" min="3" max="36" step="1" value="16">
+          <span class="val" id="ring-n-val">16</span>
+        </div>
+        <label class="toggle-row"><input type="checkbox" id="chk-flow" checked> Flow along fibers (the $U(1)$ action)</label>
+        <label class="toggle-row"><input type="checkbox" id="chk-spin" checked> Ambient rotation</label>
+      </div>
+    </div>
+
+    <!-- ================= MOBIUS ================= -->
+    <div id="mobius-ui" style="display:none">
+      <div class="kicker">Interval bundles over $S^1$</div>
+      <div class="prose">
+        <p>Glue $[0,2\pi]\times[-1,1]$ end-to-end with $k$ half-twists. For $k=0$ this is the trivial bundle — a cylinder, $S^1\times[-1,1]$. For $k=1$ it is the Möbius band: still <i>locally</i> a product everywhere, but globally twisted. Transition functions live in $G=\{\pm 1\}$, and bundles are classified by $k \bmod 2 \in H^1(S^1;\mathbb{Z}/2)$.</p>
+      </div>
+      <div class="callout">
+        <b>Transport the arrow.</b> Press <i>Transport around loop</i>: an orientation of the fiber is carried once around the base circle. When $k$ is odd it comes back <i>reversed</i> — the visual proof that no continuous orientation (no nonvanishing section of the associated line bundle) exists.
+      </div>
+      <div class="ctl">
+        <div class="ctl-row">
+          <label>Half-twists $k$</label>
+          <input type="range" id="twist-k" min="0" max="4" step="1" value="1">
+          <span class="val" id="twist-k-val">1</span>
+        </div>
+        <div class="ctl-row">
+          <label>Base point $u_0$</label>
+          <input type="range" id="mob-u" min="0" max="6.283" step="0.01" value="0">
+          <span class="val" id="mob-u-val">0.00</span>
+        </div>
+        <div class="btns">
+          <button class="act primary" id="btn-transport">Transport around loop</button>
+          <button class="act ghost" id="btn-reset-arrow">Reset</button>
+        </div>
+        <label class="toggle-row"><input type="checkbox" id="chk-chart"> Show a local trivialization $\pi^{-1}(U)\cong U\times F$</label>
+        <label class="toggle-row"><input type="checkbox" id="chk-spin2" checked> Ambient rotation</label>
+        <div id="transport-status"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<button id="panel-toggle" title="Show panel">☰</button>
+
+<div id="inset-wrap">
+  <canvas id="inset-canvas" width="400" height="400"></canvas>
+  <div id="inset-label">base S² — click to grow a fiber</div>
+</div>
+
+<div id="hint">drag to orbit · scroll to zoom</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   Fiber Bundles — interactive atlas
+   Scene 1: Hopf fibration S^1 -> S^3 -> S^2 (stereographic)
+   Scene 2: k-half-twist interval bundles over S^1
+============================================================ */
+
+renderMathInElement(document.getElementById('panel'), {
+  delimiters:[{left:'$',right:'$',display:false}],
+  throwOnError:false
+});
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------- renderer / camera / orbit ---------------- */
+const canvas = document.getElementById('main-canvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
+
+const orbit = {
+  theta: 0.9, phi: 1.15, dist: 11.5,
+  tTheta: 0.9, tPhi: 1.15, tDist: 11.5,
+  target: new THREE.Vector3(0,0,0),
+  dragging:false, px:0, py:0
+};
+function orbitApply(){
+  orbit.theta += (orbit.tTheta - orbit.theta)*0.14;
+  orbit.phi   += (orbit.tPhi   - orbit.phi  )*0.14;
+  orbit.dist  += (orbit.tDist  - orbit.dist )*0.14;
+  const sp = Math.sin(orbit.phi), cp = Math.cos(orbit.phi);
+  camera.position.set(
+    orbit.target.x + orbit.dist * sp * Math.cos(orbit.theta),
+    orbit.target.y + orbit.dist * cp,
+    orbit.target.z + orbit.dist * sp * Math.sin(orbit.theta)
+  );
+  camera.lookAt(orbit.target);
+}
+canvas.addEventListener('pointerdown', e=>{
+  orbit.dragging = true; orbit.px = e.clientX; orbit.py = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e=>{
+  if(!orbit.dragging) return;
+  const dx = e.clientX - orbit.px, dy = e.clientY - orbit.py;
+  orbit.px = e.clientX; orbit.py = e.clientY;
+  orbit.tTheta += dx * 0.0055;
+  orbit.tPhi = Math.min(Math.PI-0.05, Math.max(0.05, orbit.tPhi + dy*0.0055));
+});
+canvas.addEventListener('pointerup', ()=> orbit.dragging=false);
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  orbit.tDist = Math.min(60, Math.max(2.5, orbit.tDist * (1 + Math.sign(e.deltaY)*0.09)));
+},{passive:false});
+
+/* ---------------- shared helpers ---------------- */
+function makeLights(scene){
+  scene.add(new THREE.HemisphereLight(0xbfd0ff, 0x121228, 0.85));
+  const d1 = new THREE.DirectionalLight(0xffffff, 0.75); d1.position.set(6,9,4); scene.add(d1);
+  const d2 = new THREE.DirectionalLight(0x88aaff, 0.35); d2.position.set(-7,-4,-6); scene.add(d2);
+}
+
+/* ============================================================
+   SCENE 1 — HOPF
+============================================================ */
+const hopfScene = new THREE.Scene();
+hopfScene.fog = new THREE.FogExp2(0x0b1020, 0.016);
+makeLights(hopfScene);
+const hopfGroup = new THREE.Group();
+hopfScene.add(hopfGroup);
+
+// fiber over base point (theta, phi) on S^2, parameter t in [0,2pi)
+// S^3 point: (c cos(t+phi), c sin(t+phi), s cos t, s sin t), c=cos(th/2), s=sin(th/2)
+// stereographic projection from (0,0,0,1): (x1,y1,x2)/(1 - y2)
+function hopfPoint(theta, phi, t, out){
+  const c = Math.cos(theta/2), s = Math.sin(theta/2);
+  const x1 = c*Math.cos(t+phi), y1 = c*Math.sin(t+phi);
+  const x2 = s*Math.cos(t),     y2 = s*Math.sin(t);
+  let d = 1 - y2;
+  if (d < 1e-4) d = 1e-4;
+  out.set(x1/d, x2/d, y1/d);   // map math-z to three-y later; here choose axes for a nice default view
+  return out;
+}
+function baseColor(theta, phi){
+  const h = ((phi/(2*Math.PI)) % 1 + 1) % 1;
+  const l = 0.38 + 0.34 * (theta/Math.PI);
+  return new THREE.Color().setHSL(h, 0.85, l);
+}
+
+const fibers = [];            // {theta, phi, mesh, bead, marker}
+const SEG = 170;
+const _v = new THREE.Vector3();
+
+function buildFiberMesh(theta, phi){
+  theta = Math.min(2.72, Math.max(0.08, theta));
+  const pts = [];
+  let maxR = 0;
+  for(let i=0;i<SEG;i++){
+    const t = i/SEG * 2*Math.PI;
+    const p = hopfPoint(theta, phi, t, new THREE.Vector3());
+    maxR = Math.max(maxR, p.length());
+    pts.push(p);
+  }
+  const curve = new THREE.CatmullRomCurve3(pts, true);
+  const tubeR = 0.045 * (1 + 0.035*maxR);          // thicker tubes for the big outer fibers
+  const geo = new THREE.TubeGeometry(curve, SEG, tubeR, 8, true);
+  const col = baseColor(theta, phi);
+  const mat = new THREE.MeshPhongMaterial({
+    color: col, shininess: 60,
+    emissive: col.clone().multiplyScalar(0.22)
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+const beadGeo = new THREE.SphereGeometry(0.11, 12, 10);
+function addHopfFiber(theta, phi){
+  theta = Math.min(2.72, Math.max(0.08, theta));   // keep the near-pole fiber (which escapes to ∞) bounded
+  const mesh = buildFiberMesh(theta, phi);
+  hopfGroup.add(mesh);
+  const bead = new THREE.Mesh(beadGeo, new THREE.MeshBasicMaterial({color:0xffffff}));
+  bead.visible = ui.flow.checked;
+  hopfGroup.add(bead);
+  const marker = addBaseMarker(theta, phi);
+  fibers.push({theta, phi, mesh, bead, marker, off: Math.random()*6.28});
+}
+function removeFiber(f){
+  hopfGroup.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose();
+  hopfGroup.remove(f.bead); f.bead.material.dispose();
+  insetScene.remove(f.marker); f.marker.material.dispose();
+}
+function clearFibers(){ while(fibers.length) removeFiber(fibers.pop()); }
+function undoFiber(){ const f = fibers.pop(); if(f) removeFiber(f); }
+
+/* live preview fiber while dragging on the base sphere */
+let liveFiber = null;
+function setLiveFiber(theta, phi){
+  if(liveFiber){ hopfGroup.remove(liveFiber); liveFiber.geometry.dispose(); liveFiber.material.dispose(); }
+  liveFiber = buildFiberMesh(theta, phi);
+  liveFiber.material.transparent = true;
+  liveFiber.material.opacity = 0.55;
+  hopfGroup.add(liveFiber);
+}
+function dropLiveFiber(){
+  if(liveFiber){ hopfGroup.remove(liveFiber); liveFiber.geometry.dispose(); liveFiber.material.dispose(); liveFiber=null; }
+}
+
+/* ---------------- inset: the base S^2 ---------------- */
+const insetCanvas = document.getElementById('inset-canvas');
+const insetRenderer = new THREE.WebGLRenderer({canvas: insetCanvas, antialias:true, alpha:true});
+insetRenderer.setPixelRatio(Math.min(devicePixelRatio,2));
+insetRenderer.setSize(400,400,false);
+const insetScene = new THREE.Scene();
+const insetCam = new THREE.PerspectiveCamera(38, 1, 0.1, 20);
+insetCam.position.set(0, 1.35, 3.1);
+insetCam.lookAt(0,0,0);
+insetScene.add(new THREE.HemisphereLight(0xcfd8ff, 0x101228, 1.0));
+const insetDir = new THREE.DirectionalLight(0xffffff, 0.7); insetDir.position.set(2,3,2); insetScene.add(insetDir);
+
+const baseSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 48, 32),
+  new THREE.MeshPhongMaterial({color:0x232a4d, shininess:30, transparent:true, opacity:0.96})
+);
+insetScene.add(baseSphere);
+insetScene.add(new THREE.Mesh(
+  new THREE.SphereGeometry(1.001, 24, 16),
+  new THREE.MeshBasicMaterial({color:0x9fb4ff, wireframe:true, transparent:true, opacity:0.10})
+));
+
+// math convention on the base sphere: theta from +Y(three) pole, phi around Y.
+// base point in three coords: (sin th cos ph, cos th, sin th sin ph)
+function addBaseMarker(theta, phi){
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8),
+    new THREE.MeshBasicMaterial({color: baseColor(theta,phi)}));
+  m.position.set(Math.sin(theta)*Math.cos(phi), Math.cos(theta), Math.sin(theta)*Math.sin(phi));
+  insetScene.add(m);
+  return m;
+}
+const raycaster = new THREE.Raycaster();
+let insetPointerDown = false;
+let lastPick = null;
+function pickBase(e){
+  const r = insetCanvas.getBoundingClientRect();
+  const x = ((e.clientX - r.left)/r.width)*2 - 1;
+  const y = -(((e.clientY - r.top)/r.height)*2 - 1);
+  raycaster.setFromCamera({x,y}, insetCam);
+  const hit = raycaster.intersectObject(baseSphere)[0];
+  if(!hit) return null;
+  const p = hit.point.clone().normalize();
+  const theta = Math.acos(Math.min(1, Math.max(-1, p.y)));
+  const phi = Math.atan2(p.z, p.x);
+  return {theta, phi};
+}
+insetCanvas.addEventListener('pointerdown', e=>{
+  insetPointerDown = true;
+  insetCanvas.setPointerCapture(e.pointerId);
+  const b = pickBase(e);
+  if(b){ lastPick = b; setLiveFiber(b.theta, b.phi); }
+});
+insetCanvas.addEventListener('pointermove', e=>{
+  if(!insetPointerDown) return;
+  const b = pickBase(e);
+  if(b){ lastPick = b; setLiveFiber(b.theta, b.phi); }
+});
+insetCanvas.addEventListener('pointerup', ()=>{
+  insetPointerDown = false;
+  dropLiveFiber();
+  if(lastPick){ addHopfFiber(lastPick.theta, lastPick.phi); lastPick = null; }
+});
+
+/* ---------------- Hopf presets ---------------- */
+const ui = {
+  ringTheta: document.getElementById('ring-theta'),
+  ringThetaVal: document.getElementById('ring-theta-val'),
+  ringN: document.getElementById('ring-n'),
+  ringNVal: document.getElementById('ring-n-val'),
+  flow: document.getElementById('chk-flow'),
+  spin: document.getElementById('chk-spin'),
+};
+ui.ringTheta.addEventListener('input', ()=> ui.ringThetaVal.textContent = (+ui.ringTheta.value).toFixed(2));
+ui.ringN.addEventListener('input', ()=> ui.ringNVal.textContent = ui.ringN.value);
+
+function addRing(theta, n){
+  for(let i=0;i<n;i++) addHopfFiber(theta, i/n * 2*Math.PI);
+}
+document.getElementById('btn-ring').addEventListener('click', ()=>
+  addRing(+ui.ringTheta.value, +ui.ringN.value));
+document.getElementById('btn-sweep').addEventListener('click', ()=>{
+  clearFibers();
+  const bands = [0.32, 0.75, 1.18, 1.62, 2.06, 2.5];
+  bands.forEach(th => addRing(th, +ui.ringN.value));
+});
+document.getElementById('btn-great').addEventListener('click', ()=>{
+  const n = Math.max(8, +ui.ringN.value);
+  for(let i=0;i<n;i++){
+    const a = i/n * 2*Math.PI;                        // meridian through the poles
+    const p = new THREE.Vector3(Math.sin(a), Math.cos(a), 0);
+    const theta = Math.acos(Math.min(1,Math.max(-1,p.y)));
+    const phi = Math.atan2(p.z, p.x);
+    addHopfFiber(Math.min(2.9, Math.max(0.08, theta)), phi);
+  }
+});
+document.getElementById('btn-undo').addEventListener('click', undoFiber);
+document.getElementById('btn-clear').addEventListener('click', clearFibers);
+ui.flow.addEventListener('change', ()=> fibers.forEach(f=> f.bead.visible = ui.flow.checked));
+
+/* ============================================================
+   SCENE 2 — MOBIUS / k half-twist band
+============================================================ */
+const mobScene = new THREE.Scene();
+mobScene.fog = new THREE.FogExp2(0x0b1020, 0.02);
+makeLights(mobScene);
+const mobGroup = new THREE.Group();
+mobScene.add(mobGroup);
+
+const MOB = { R: 2.6, W: 0.95, k: 1, u0: 0 };
+
+// band point at (u, s): center circle + s * fiberDir(u)
+function fiberDir(u, k, out){
+  const a = k*u/2;
+  out.set(Math.cos(a)*Math.cos(u), Math.sin(a), Math.cos(a)*Math.sin(u));
+  return out;
+}
+function bandPoint(u, s, k, out){
+  fiberDir(u, k, out);
+  out.multiplyScalar(s);
+  out.x += MOB.R*Math.cos(u);
+  out.z += MOB.R*Math.sin(u);
+  return out;
+}
+
+let bandMesh=null, rulings=null, baseRing=null, fiberTube=null, basePt=null,
+    arrow=null, ghostArrow=null, chartMesh=null;
+
+function buildBand(){
+  // dispose old
+  [bandMesh, rulings, fiberTube, chartMesh].forEach(o=>{
+    if(o){ mobGroup.remove(o); o.geometry.dispose(); o.material.dispose(); }
+  });
+  const k = MOB.k;
+  const NU = 340, NS = 10;
+  const pos = [], norm = [], idx = [];
+  const p = new THREE.Vector3();
+  for(let i=0;i<=NU;i++){
+    const u = i/NU * 2*Math.PI;
+    for(let j=0;j<=NS;j++){
+      const s = (j/NS*2 - 1) * MOB.W;
+      bandPoint(u, s, k, p);
+      pos.push(p.x, p.y, p.z);
+    }
+  }
+  for(let i=0;i<NU;i++) for(let j=0;j<NS;j++){
+    const a = i*(NS+1)+j, b = a+NS+1;
+    idx.push(a, b, a+1, b, b+1, a+1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  bandMesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+    color:0x4a5588, metalness:0.15, roughness:0.55,
+    side:THREE.DoubleSide, transparent:true, opacity:0.92
+  }));
+  mobGroup.add(bandMesh);
+
+  // ruling lines: the fibers themselves, drawn faintly everywhere
+  const NL = 56, lp = [];
+  for(let i=0;i<NL;i++){
+    const u = i/NL * 2*Math.PI;
+    bandPoint(u,-MOB.W,k,p); lp.push(p.x,p.y,p.z);
+    bandPoint(u, MOB.W,k,p); lp.push(p.x,p.y,p.z);
+  }
+  const lgeo = new THREE.BufferGeometry();
+  lgeo.setAttribute('position', new THREE.Float32BufferAttribute(lp,3));
+  rulings = new THREE.LineSegments(lgeo,
+    new THREE.LineBasicMaterial({color:0xaebaff, transparent:true, opacity:0.28}));
+  mobGroup.add(rulings);
+
+  if(!baseRing){
+    const rgeo = new THREE.TorusGeometry(MOB.R, 0.022, 8, 128);
+    baseRing = new THREE.Mesh(rgeo, new THREE.MeshBasicMaterial({color:0x7fe0c3}));
+    baseRing.rotation.x = Math.PI/2;
+    mobGroup.add(baseRing);
+  }
+  updateFiberHighlight();
+  updateChart();
+  resetArrow();
+}
+
+function updateFiberHighlight(){
+  if(fiberTube){ mobGroup.remove(fiberTube); fiberTube.geometry.dispose(); fiberTube.material.dispose(); }
+  const p0 = bandPoint(MOB.u0, -MOB.W, MOB.k, new THREE.Vector3());
+  const p1 = bandPoint(MOB.u0,  MOB.W, MOB.k, new THREE.Vector3());
+  const curve = new THREE.LineCurve3(p0, p1);
+  fiberTube = new THREE.Mesh(new THREE.TubeGeometry(curve, 2, 0.05, 8, false),
+    new THREE.MeshBasicMaterial({color:0xffe08a}));
+  mobGroup.add(fiberTube);
+  if(!basePt){
+    basePt = new THREE.Mesh(new THREE.SphereGeometry(0.075,12,10),
+      new THREE.MeshBasicMaterial({color:0x7fe0c3}));
+    mobGroup.add(basePt);
+  }
+  basePt.position.set(MOB.R*Math.cos(MOB.u0), 0, MOB.R*Math.sin(MOB.u0));
+}
+
+function updateChart(){
+  if(chartMesh){ mobGroup.remove(chartMesh); chartMesh.geometry.dispose(); chartMesh.material.dispose(); chartMesh=null; }
+  if(!document.getElementById('chk-chart').checked) return;
+  const k = MOB.k, du = 0.95, NU = 60, NS = 8;
+  const pos = [], idx = [];
+  const p = new THREE.Vector3(), n = new THREE.Vector3(), q = new THREE.Vector3();
+  for(let i=0;i<=NU;i++){
+    const u = MOB.u0 - du + (i/NU)*2*du;
+    for(let j=0;j<=NS;j++){
+      const s = (j/NS*2-1) * (MOB.W*1.04);
+      bandPoint(u,s,k,p);
+      // numeric normal: cross of partials
+      bandPoint(u+1e-3,s,k,n).sub(p);
+      bandPoint(u,s+1e-3,k,q).sub(p);
+      n.cross(q).normalize().multiplyScalar(0.018);
+      pos.push(p.x+n.x, p.y+n.y, p.z+n.z);
+    }
+  }
+  for(let i=0;i<NU;i++) for(let j=0;j<NS;j++){
+    const a=i*(NS+1)+j, b=a+NS+1;
+    idx.push(a,b,a+1, b,b+1,a+1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  chartMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color:0x7fe0c3, transparent:true, opacity:0.30, side:THREE.DoubleSide, depthWrite:false
+  }));
+  mobGroup.add(chartMesh);
+}
+
+/* --- parallel transport of a fiber orientation --- */
+const transport = { active:false, p:0, speed: reduceMotion ? 1 : 0.00019 };
+const statusEl = document.getElementById('transport-status');
+
+function makeArrow(color, opacity){
+  const a = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(), MOB.W*1.5, color, 0.32, 0.18);
+  a.line.material.transparent = a.cone.material.transparent = true;
+  a.line.material.opacity = a.cone.material.opacity = opacity;
+  a.line.material.linewidth = 2;
+  return a;
+}
+function placeArrow(a, uCont){
+  const d = fiberDir(uCont, MOB.k, new THREE.Vector3());
+  a.position.set(MOB.R*Math.cos(uCont), 0, MOB.R*Math.sin(uCont));
+  a.position.addScaledVector(d, -MOB.W*0.75);
+  a.setDirection(d);
+}
+function resetArrow(){
+  if(arrow){ mobGroup.remove(arrow); }
+  if(ghostArrow){ mobGroup.remove(ghostArrow); ghostArrow=null; }
+  arrow = makeArrow(0xffe08a, 1.0);
+  placeArrow(arrow, MOB.u0);
+  mobGroup.add(arrow);
+  transport.active = false; transport.p = 0;
+  statusEl.textContent = '';
+}
+document.getElementById('btn-transport').addEventListener('click', ()=>{
+  resetArrow();
+  ghostArrow = makeArrow(0xffffff, 0.28);
+  placeArrow(ghostArrow, MOB.u0);
+  mobGroup.add(ghostArrow);
+  transport.active = true; transport.p = 0;
+  statusEl.textContent = 'transporting…';
+});
+document.getElementById('btn-reset-arrow').addEventListener('click', resetArrow);
+
+function stepTransport(dt){
+  if(!transport.active) return;
+  transport.p = Math.min(1, transport.p + transport.speed*dt);
+  placeArrow(arrow, MOB.u0 + transport.p * 2*Math.PI);
+  if(transport.p >= 1){
+    transport.active = false;
+    statusEl.textContent = (MOB.k % 2 === 1)
+      ? '↺ returned REVERSED — no continuous orientation exists. Nontrivial bundle (k odd).'
+      : '↺ returned unchanged — orientable, trivial as a bundle (k even).';
+  }
+}
+
+/* --- mobius UI --- */
+const kSlider = document.getElementById('twist-k'), kVal = document.getElementById('twist-k-val');
+const uSlider = document.getElementById('mob-u'), uVal = document.getElementById('mob-u-val');
+kSlider.addEventListener('input', ()=>{
+  MOB.k = +kSlider.value; kVal.textContent = kSlider.value;
+  buildBand();
+});
+uSlider.addEventListener('input', ()=>{
+  MOB.u0 = +uSlider.value; uVal.textContent = (+uSlider.value).toFixed(2);
+  updateFiberHighlight(); updateChart();
+  if(!transport.active) placeArrow(arrow, MOB.u0);
+});
+document.getElementById('chk-chart').addEventListener('change', updateChart);
+
+buildBand();
+
+/* ============================================================
+   scene switching / resize / loop
+============================================================ */
+let active = 'hopf';
+const hopfUI = document.getElementById('hopf-ui');
+const mobUI  = document.getElementById('mobius-ui');
+const insetWrap = document.getElementById('inset-wrap');
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    active = tab.dataset.scene;
+    hopfUI.style.display = active==='hopf' ? '' : 'none';
+    mobUI.style.display  = active==='mobius' ? '' : 'none';
+    insetWrap.style.display = active==='hopf' ? '' : 'none';
+    if(active==='hopf'){ orbit.tDist = 11.5; } else { orbit.tDist = 8.5; }
+  });
+});
+
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+// initial content: a small welcoming sweep
+addRing(0.7, 12); addRing(1.35, 12); addRing(2.1, 12);
+
+let prev = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = Math.min(50, now - prev); prev = now;
+  orbitApply();
+
+  if(active === 'hopf'){
+    const spin = ui.spin.checked && !reduceMotion;
+    if(spin) hopfGroup.rotation.y += 0.00028 * dt;
+    if(ui.flow.checked){
+      const t = now * 0.0012;
+      for(const f of fibers){
+        hopfPoint(f.theta, f.phi, t + f.off, _v);
+        f.bead.position.copy(_v);
+      }
+    }
+    renderer.render(hopfScene, camera);
+    insetRenderer.render(insetScene, insetCam);
+  } else {
+    const spin2 = document.getElementById('chk-spin2').checked && !reduceMotion;
+    if(spin2) mobGroup.rotation.y += 0.00022 * dt;
+    stepTransport(dt);
+    renderer.render(mobScene, camera);
+  }
+}
+requestAnimationFrame(loop);
+
+/* panel collapse */
+document.getElementById('panel-toggle').addEventListener('click', ()=>{
+  document.getElementById('panel').classList.remove('hidden');
+});
+document.getElementById('panel-head').addEventListener('dblclick', ()=>{
+  document.getElementById('panel').classList.add('hidden');
+});
+</script>
+</body>
+</html>
