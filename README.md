@@ -5,3 +5,4 @@ This repo contains some fun on-the-fly html visualizations of math stuff I've he
 Load any of these into your browser for a fun time : )
 
 - [Fiber Bundles](fiber-bundles.html)
+- [Collatz Orbits Embedded in $q$-ary Lattices](collatz-orbit.html)
