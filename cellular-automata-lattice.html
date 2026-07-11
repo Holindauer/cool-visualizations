@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cellular Automaton ↔ q-ary Lattice Visualizer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg0: #050913;
+      --bg1: #0a1326;
+      --panel: rgba(9, 16, 34, 0.78);
+      --border: rgba(124, 190, 255, 0.20);
+      --text: #edf7ff;
+      --muted: #98aec8;
+      --cyan: #68e8ff;
+      --violet: #ba95ff;
+      --green: #7cf0bd;
+      --red: #ff7a9a;
+      --gold: #ffd37a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 16% 18%, rgba(58, 110, 180, 0.20), transparent 28%),
+        radial-gradient(circle at 85% 78%, rgba(112, 68, 178, 0.18), transparent 32%),
+        linear-gradient(145deg, var(--bg0), var(--bg1) 62%, #0a0817);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 10;
+      background: #050913;
+      color: #e7fbff;
+      letter-spacing: .03em;
+      font-size: 14px;
+      transition: opacity 250ms ease;
+    }
+
+    .glass {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(18px) saturate(130%);
+      -webkit-backdrop-filter: blur(18px) saturate(130%);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 430px 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    #sidebar {
+      border-radius: 20px;
+      padding: 18px;
+      overflow: auto;
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      letter-spacing: -.02em;
+    }
+
+    .subtitle {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+
+    .equation {
+      padding: 12px 13px;
+      border-radius: 14px;
+      background: rgba(104, 232, 255, 0.07);
+      border: 1px solid rgba(104, 232, 255, 0.12);
+      font-size: 12px;
+      color: #def8ff;
+      line-height: 1.55;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      overflow-wrap: anywhere;
+      margin-bottom: 14px;
+    }
+
+    .sectionTitle {
+      margin-top: 12px;
+      margin-bottom: 9px;
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #b9cde4;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .02em;
+    }
+
+    input[type="number"], select {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      outline: none;
+      color: var(--text);
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(180,220,255,0.14);
+    }
+
+    input[type="number"]:focus, select:focus {
+      border-color: rgba(104,232,255,0.55);
+      box-shadow: 0 0 0 3px rgba(104,232,255,0.08);
+    }
+
+    .rangeRow {
+      display: grid;
+      grid-template-columns: 1fr 58px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--violet);
+    }
+
+    .valueBadge {
+      text-align: center;
+      padding: 6px 4px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.055);
+      color: #e5fbff;
+      font-size: 11px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    .toggleRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 10px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .toggle input {
+      accent-color: var(--cyan);
+    }
+
+    .buttonRow {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid rgba(124,220,255,0.25);
+      border-radius: 11px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: #eafcff;
+      font-weight: 650;
+      background: linear-gradient(135deg, rgba(67, 163, 222, 0.28), rgba(124, 98, 188, 0.28));
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(104,232,255,0.6);
+      background: linear-gradient(135deg, rgba(67, 163, 222, 0.40), rgba(124, 98, 188, 0.40));
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .stat {
+      border-radius: 12px;
+      padding: 10px 9px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .stat .k {
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .stat .v {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 760;
+      color: #f5fcff;
+    }
+
+    .codePanel {
+      margin-top: 12px;
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.05);
+      font-size: 12px;
+      line-height: 1.55;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      color: #def7ff;
+      max-height: 220px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      vertical-align: middle;
+    }
+
+    .pill.ok { color: #071411; background: rgba(124,240,189,0.95); }
+    .pill.bad { color: #290613; background: rgba(255,122,154,0.95); }
+
+    #viewer {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: 1fr;
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #split {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 42% 58%;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    #caPane, #threePane {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #caPane {
+      border-right: 1px solid rgba(255,255,255,0.08);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
+        radial-gradient(circle at 20% 20%, rgba(80, 140, 220, 0.18), transparent 30%),
+        #061021;
+    }
+
+    #threePane {
+      background:
+        radial-gradient(circle at 25% 18%, rgba(60, 100, 185, 0.22), transparent 28%),
+        radial-gradient(circle at 82% 80%, rgba(130, 82, 205, 0.18), transparent 34%),
+        linear-gradient(180deg, #050913, #071121);
+    }
+
+    #caCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+
+    .paneLabel {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 3;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      color: #daf7ff;
+      background: rgba(10, 18, 36, 0.68);
+      border: 1px solid rgba(124,190,255,0.16);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 12px 34px rgba(0,0,0,.25);
+    }
+
+    #legend {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      z-index: 3;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: 11px;
+      color: var(--muted);
+      background: rgba(10, 18, 36, 0.68);
+      border: 1px solid rgba(124,190,255,0.16);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .legendItem {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+
+    .sw {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 10px currentColor;
+      background: currentColor;
+    }
+
+    .hint {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: rgba(222, 240, 255, 0.68);
+      text-shadow: 0 1px 8px #000;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    @media (max-width: 1100px) {
+      #app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+      #sidebar { max-height: 44vh; }
+    }
+
+    @media (max-width: 760px) {
+      #split { grid-template-columns: 1fr; grid-template-rows: 38% 62%; }
+      #caPane { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
+      .buttonRow { grid-template-columns: 1fr 1fr; }
+      .buttonRow button:last-child { grid-column: span 2; }
+      .stats { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading CA ↔ lattice visualizer…</div>
+
+  <div id="app">
+    <aside id="sidebar" class="glass">
+      <h1>Cellular automaton → q-ary lattice</h1>
+      <div class="subtitle">
+        The current automaton row is broken into six bit chunks. The first three chunks become the modular
+        coefficient vector <em>a</em>, and the next three become a point <em>p</em> in residue space.
+        The right pane shows the q-ary lattice
+        <span style="white-space:nowrap;">\(L_t = \{y \in \mathbb Z^3 : a_t \cdot y \equiv 0 \pmod q\}\)</span>
+        along with the encoded point \(p_t\).
+      </div>
+
+      <div id="equation" class="equation"></div>
+
+      <div class="sectionTitle">Automaton</div>
+      <div class="grid">
+        <label>
+          Rule
+          <input id="rule" type="number" min="0" max="255" step="1" value="90" />
+        </label>
+        <label>
+          Width
+          <input id="width" type="number" min="24" max="180" step="1" value="72" />
+        </label>
+        <label>
+          Seed mode
+          <select id="seedMode">
+            <option value="single" selected>single center 1</option>
+            <option value="random">random row</option>
+            <option value="stripe">alternating stripe</option>
+          </select>
+        </label>
+        <label>
+          Speed (steps/s)
+          <input id="speed" type="number" min="1" max="60" step="1" value="10" />
+        </label>
+      </div>
+
+      <div class="sectionTitle">Lattice embedding</div>
+      <div class="grid">
+        <label>
+          Modulus q
+          <input id="q" type="number" min="2" max="97" step="1" value="11" />
+        </label>
+        <label>
+          Chunk bits
+          <input id="chunkBits" type="number" min="2" max="16" step="1" value="6" />
+        </label>
+      </div>
+
+      <div class="sectionTitle">3D view</div>
+      <label>
+        Lattice radius
+        <div class="rangeRow">
+          <input id="radius" type="range" min="4" max="16" step="1" value="8" />
+          <span id="radiusValue" class="valueBadge">8</span>
+        </div>
+      </label>
+      <label style="margin-top:10px;">
+        Point size
+        <div class="rangeRow">
+          <input id="pointSize" type="range" min="0.05" max="0.40" step="0.01" value="0.15" />
+          <span id="pointSizeValue" class="valueBadge">0.15</span>
+        </div>
+      </label>
+
+      <div class="toggleRow">
+        <label class="toggle"><input id="autoRotate" type="checkbox" checked /> auto-rotate</label>
+        <label class="toggle"><input id="showOrbit" type="checkbox" checked /> show full encoded-point orbit</label>
+        <label class="toggle"><input id="showRejected" type="checkbox" /> show rejected points</label>
+        <label class="toggle"><input id="showSlices" type="checkbox" checked /> show congruence slices</label>
+      </div>
+
+      <div class="buttonRow">
+        <button id="playPause">Pause</button>
+        <button id="step">Step</button>
+        <button id="reset">Reset</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Members</div><div id="memberCount" class="v">—</div></div>
+        <div class="stat"><div class="k">Residue point</div><div id="pointCoords" class="v">—</div></div>
+        <div class="stat"><div class="k">Membership</div><div id="membership" class="v">—</div></div>
+      </div>
+
+      <div id="chunkInfo" class="codePanel"></div>
+    </aside>
+
+    <main id="viewer" class="glass">
+      <div id="split">
+        <section id="caPane">
+          <div class="paneLabel">Cellular automaton history</div>
+          <canvas id="caCanvas"></canvas>
+        </section>
+
+        <section id="threePane">
+          <div class="paneLabel">Current row as a q-ary lattice + encoded point</div>
+          <div id="legend">
+            <div class="legendItem"><span class="sw" style="color:#68e8ff"></span> lattice member</div>
+            <div class="legendItem"><span class="sw" style="color:#ba95ff"></span> recent encoded point trail</div>
+            <div class="legendItem"><span class="sw" style="color:#ffd37a"></span> current encoded point</div>
+            <div class="legendItem"><span class="sw" style="color:#ff7a9a"></span> rejected point</div>
+          </div>
+          <div class="hint">Rotate, pan, and zoom in the lattice pane · the orbit now keeps all points</div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const $ = (id) => document.getElementById(id);
+
+    // ---------- Cellular automaton state ----------
+    let currentRow = [];
+    let history = [];
+    let running = true;
+    let lastStep = 0;
+    let generation = 0;
+    const encodedTrail = [];
+
+    const caCanvas = $("caCanvas");
+    const caCtx = caCanvas.getContext("2d");
+
+    function parseIntSafe(el, fallback) {
+      const v = parseInt(el.value, 10);
+      return Number.isFinite(v) ? v : fallback;
+    }
+    function parseFloatSafe(el, fallback) {
+      const v = parseFloat(el.value);
+      return Number.isFinite(v) ? v : fallback;
+    }
+    function mod(n, q) {
+      const r = n % q;
+      return r < 0 ? r + q : r;
+    }
+    function centerResidue(v, q) {
+      return v > q / 2 ? v - q : v;
+    }
+    function toBitArray(width, mode) {
+      const arr = new Array(width).fill(0);
+      if (mode === "single") {
+        arr[Math.floor(width / 2)] = 1;
+      } else if (mode === "random") {
+        for (let i = 0; i < width; i++) arr[i] = Math.random() < 0.33 ? 1 : 0;
+      } else if (mode === "stripe") {
+        for (let i = 0; i < width; i++) arr[i] = i % 2;
+      }
+      return arr;
+    }
+    function nextCA(row, rule) {
+      const width = row.length;
+      const out = new Array(width);
+      for (let i = 0; i < width; i++) {
+        const left = row[(i - 1 + width) % width];
+        const center = row[i];
+        const right = row[(i + 1) % width];
+        const idx = (left << 2) | (center << 1) | right;
+        out[i] = (rule >> idx) & 1;
+      }
+      return out;
+    }
+
+    function initializeCA() {
+      const width = Math.max(24, Math.min(180, parseIntSafe($("width"), 72)));
+      const mode = $("seedMode").value;
+      currentRow = toBitArray(width, mode);
+      history = [currentRow.slice()];
+      generation = 0;
+      encodedTrail.length = 0;
+      updateEmbedding(true);
+      drawCA();
+    }
+
+    function stepCA() {
+      const rule = Math.max(0, Math.min(255, parseIntSafe($("rule"), 90)));
+      currentRow = nextCA(currentRow, rule);
+      history.push(currentRow.slice());
+      generation += 1;
+
+      const maxRows = Math.max(40, Math.floor(caCanvas.height / 6));
+      if (history.length > maxRows) history.shift();
+
+      updateEmbedding(false);
+      drawCA();
+    }
+
+    function drawCA() {
+      const pane = $("caPane");
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = pane.getBoundingClientRect();
+      const width = Math.max(10, Math.floor(rect.width));
+      const height = Math.max(10, Math.floor(rect.height));
+      caCanvas.width = Math.floor(width * dpr);
+      caCanvas.height = Math.floor(height * dpr);
+      caCanvas.style.width = width + "px";
+      caCanvas.style.height = height + "px";
+      caCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const rows = history.length;
+      const cols = currentRow.length;
+      const cellW = width / cols;
+      const cellH = height / Math.max(rows, 1);
+
+      caCtx.clearRect(0, 0, width, height);
+
+      // Background glow
+      const bg = caCtx.createLinearGradient(0, 0, 0, height);
+      bg.addColorStop(0, "rgba(8,16,32,0.0)");
+      bg.addColorStop(1, "rgba(8,16,32,0.20)");
+      caCtx.fillStyle = bg;
+      caCtx.fillRect(0, 0, width, height);
+
+      for (let r = 0; r < rows; r++) {
+        const row = history[r];
+        for (let c = 0; c < cols; c++) {
+          if (row[c]) {
+            const x = c * cellW;
+            const y = r * cellH;
+            const isCurrent = r === rows - 1;
+            const hue = isCurrent ? "rgba(104,232,255,0.95)" : "rgba(186,149,255,0.82)";
+            caCtx.fillStyle = hue;
+            caCtx.fillRect(x, y, Math.ceil(cellW + 0.3), Math.ceil(cellH + 0.3));
+          }
+        }
+      }
+
+      // Highlight the current row with a subtle frame
+      caCtx.strokeStyle = "rgba(255,255,255,0.14)";
+      caCtx.lineWidth = 1;
+      caCtx.strokeRect(0, height - cellH, width, cellH);
+
+      // Optional chunk overlays on the current row
+      const chunkBits = Math.max(2, Math.min(16, parseIntSafe($("chunkBits"), 6)));
+      const start = chunkStartIndex(currentRow.length, chunkBits);
+      const totalBits = 6 * chunkBits;
+      for (let j = 0; j < 6; j++) {
+        const x = ((start + j * chunkBits) % currentRow.length) * cellW;
+        const w = chunkBits * cellW;
+        caCtx.strokeStyle = j < 3 ? "rgba(104,232,255,0.55)" : "rgba(255,211,122,0.65)";
+        caCtx.lineWidth = 1.25;
+        if (x + w <= width) {
+          caCtx.strokeRect(x, height - cellH, w, cellH);
+        } else {
+          // Wrap-around chunk
+          const w1 = width - x;
+          caCtx.strokeRect(x, height - cellH, w1, cellH);
+          caCtx.strokeRect(0, height - cellH, w - w1, cellH);
+        }
+      }
+
+      // Small caption
+      caCtx.fillStyle = "rgba(220,238,255,0.75)";
+      caCtx.font = '11px Inter, system-ui, sans-serif';
+      caCtx.fillText(`Gen ${generation} · width ${cols} · Rule ${parseIntSafe($("rule"), 90)}`, 12, 18);
+      if (totalBits > cols) {
+        caCtx.fillStyle = "rgba(255,211,122,0.78)";
+        caCtx.fillText(`Chunk window wraps around the row`, 12, 34);
+      }
+    }
+
+    function chunkStartIndex(width, chunkBits) {
+      const total = 6 * chunkBits;
+      return Math.floor((width - total) / 2);
+    }
+
+    function extractChunkBits(row, start, length) {
+      let bits = "";
+      for (let i = 0; i < length; i++) {
+        const idx = mod(start + i, row.length);
+        bits += row[idx] ? "1" : "0";
+      }
+      return bits;
+    }
+
+    function bitsToInt(bits) {
+      let v = 0;
+      for (let i = 0; i < bits.length; i++) v = (v << 1) | (bits[i] === "1" ? 1 : 0);
+      return v;
+    }
+
+    // ---------- Three.js setup ----------
+    const threePane = $("threePane");
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x05101f, 0.03);
+
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1000);
+    camera.position.set(19, 15, 22);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    threePane.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.055;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.65;
+    controls.minDistance = 5;
+    controls.maxDistance = 100;
+
+    scene.add(new THREE.HemisphereLight(0x97dfff, 0x251638, 1.55));
+    const key = new THREE.PointLight(0x6ce8ff, 36, 90, 2);
+    key.position.set(20, 22, 16);
+    scene.add(key);
+    const rim = new THREE.PointLight(0xb58aff, 32, 90, 2);
+    rim.position.set(-18, -8, -14);
+    scene.add(rim);
+
+    const root = new THREE.Group();
+    scene.add(root);
+
+    function makeStars(count=900) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const radius = 42 + Math.random() * 78;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        positions[3*i] = radius * Math.sin(phi) * Math.cos(theta);
+        positions[3*i+1] = radius * Math.cos(phi);
+        positions[3*i+2] = radius * Math.sin(phi) * Math.sin(theta);
+      }
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({
+        color: 0x8ccfff,
+        size: 0.14,
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false
+      });
+      return new THREE.Points(geometry, material);
+    }
+    const stars = makeStars();
+    scene.add(stars);
+
+    let memberMesh = null;
+    let rejectedMesh = null;
+    let currentPointMesh = null;
+    let orbitMesh = null;
+    let sliceGroup = null;
+    let axesGroup = null;
+
+    function disposeObject(obj) {
+      if (!obj) return;
+      obj.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+          else child.material.dispose();
+        }
+      });
+      root.remove(obj);
+    }
+
+    function makeInstancedPoints(points, color, radius, opacity=1.0, emissiveIntensity=0.42) {
+      const geometry = new THREE.IcosahedronGeometry(radius, 1);
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity,
+        roughness: 0.30,
+        metalness: 0.14,
+        transparent: opacity < 1,
+        opacity
+      });
+      const mesh = new THREE.InstancedMesh(geometry, material, points.length);
+      const dummy = new THREE.Object3D();
+      for (let i = 0; i < points.length; i++) {
+        dummy.position.set(points[i].x, points[i].y, points[i].z);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      return mesh;
+    }
+
+    function createAxes(radius) {
+      const group = new THREE.Group();
+      const extent = radius + 1.15;
+      const colors = [0xff7a9a, 0x7cf0bd, 0x68e8ff];
+      const dirs = [
+        [new THREE.Vector3(-extent,0,0), new THREE.Vector3(extent,0,0)],
+        [new THREE.Vector3(0,-extent,0), new THREE.Vector3(0,extent,0)],
+        [new THREE.Vector3(0,0,-extent), new THREE.Vector3(0,0,extent)]
+      ];
+      dirs.forEach((pair, i) => {
+        const g = new THREE.BufferGeometry().setFromPoints(pair);
+        const m = new THREE.LineBasicMaterial({ color: colors[i], transparent: true, opacity: 0.58 });
+        group.add(new THREE.Line(g, m));
+      });
+
+      const box = new THREE.Box3(
+        new THREE.Vector3(-radius, -radius, -radius),
+        new THREE.Vector3(radius, radius, radius)
+      );
+      const helper = new THREE.Box3Helper(box, 0x689bc8);
+      helper.material.transparent = true;
+      helper.material.opacity = 0.18;
+      group.add(helper);
+      return group;
+    }
+
+    function createSlices(normal, q, radius) {
+      const group = new THREE.Group();
+      const n = new THREE.Vector3(normal[0], normal[1], normal[2]);
+      const len = n.length();
+      if (len < 1e-8) return group;
+      n.normalize();
+
+      const maxDot = radius * (Math.abs(normal[0]) + Math.abs(normal[1]) + Math.abs(normal[2]));
+      const minK = Math.ceil(-maxDot / q);
+      const maxK = Math.floor(maxDot / q);
+      const planeSize = radius * 3.0;
+
+      for (let k = minK; k <= maxK; k++) {
+        const distance = (k * q) / len;
+        const g = new THREE.PlaneGeometry(planeSize, planeSize);
+        const color = k === 0 ? 0x68e8ff : 0xba95ff;
+        const m = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: k === 0 ? 0.050 : 0.026,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        });
+        const plane = new THREE.Mesh(g, m);
+        plane.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), n);
+        plane.position.copy(n).multiplyScalar(distance);
+        group.add(plane);
+
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(g),
+          new THREE.LineBasicMaterial({
+            color,
+            transparent: true,
+            opacity: k === 0 ? 0.16 : 0.06
+          })
+        );
+        edges.quaternion.copy(plane.quaternion);
+        edges.position.copy(plane.position);
+        group.add(edges);
+      }
+      return group;
+    }
+
+    function createOrbit(points) {
+      const group = new THREE.Group();
+      if (points.length < 2) return group;
+      const vecs = points.map(p => new THREE.Vector3(p.x, p.y, p.z));
+      const curve = new THREE.CatmullRomCurve3(vecs, false, "centripetal", 0.35);
+      const tube = new THREE.TubeGeometry(curve, Math.max(22, vecs.length * 3), 0.065, 6, false);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xba95ff,
+        emissive: 0x8f62ff,
+        emissiveIntensity: 1.18,
+        transparent: true,
+        opacity: 0.78,
+        roughness: 0.22,
+        metalness: 0.20
+      });
+      group.add(new THREE.Mesh(tube, mat));
+      const beads = makeInstancedPoints(points, 0xd8b6ff, 0.12, 0.9, 0.64);
+      group.add(beads);
+      return group;
+    }
+
+    function centeredCoord(val, q, radius) {
+      const centered = centerResidue(val, q);
+      const denom = Math.max(1, Math.floor(q / 2));
+      const scale = (radius * 0.90) / denom;
+      return centered * scale;
+    }
+
+    function updateThreeView(data) {
+      const radius = Math.max(4, Math.min(16, parseIntSafe($("radius"), 8)));
+      const pointSize = Math.max(0.05, Math.min(0.40, parseFloatSafe($("pointSize"), 0.15)));
+      const showRejected = $("showRejected").checked;
+      const showSlices = $("showSlices").checked;
+      const showOrbit = $("showOrbit").checked;
+
+      const members = [];
+      const rejected = [];
+      const { a, q, encodedPointResidues } = data;
+
+      for (let x = -radius; x <= radius; x++) {
+        for (let y = -radius; y <= radius; y++) {
+          for (let z = -radius; z <= radius; z++) {
+            const residue = mod(a[0]*x + a[1]*y + a[2]*z, q);
+            if (residue === 0) members.push({x, y, z});
+            else if (showRejected) rejected.push({x, y, z});
+          }
+        }
+      }
+
+      disposeObject(memberMesh);
+      disposeObject(rejectedMesh);
+      disposeObject(currentPointMesh);
+      disposeObject(orbitMesh);
+      disposeObject(sliceGroup);
+      disposeObject(axesGroup);
+
+      memberMesh = makeInstancedPoints(members, 0x68e8ff, pointSize, 0.95, 0.48);
+      root.add(memberMesh);
+
+      if (showRejected) {
+        rejectedMesh = makeInstancedPoints(rejected, 0xff7a9a, pointSize * 0.38, 0.08, 0.22);
+        root.add(rejectedMesh);
+      } else {
+        rejectedMesh = null;
+      }
+
+      axesGroup = createAxes(radius);
+      root.add(axesGroup);
+
+      if (showSlices) {
+        sliceGroup = createSlices(a, q, radius);
+        root.add(sliceGroup);
+      } else {
+        sliceGroup = null;
+      }
+
+      const cp = {
+        x: centeredCoord(encodedPointResidues[0], q, radius),
+        y: centeredCoord(encodedPointResidues[1], q, radius),
+        z: centeredCoord(encodedPointResidues[2], q, radius)
+      };
+      currentPointMesh = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(pointSize * 2.35, 2),
+        new THREE.MeshStandardMaterial({
+          color: 0xffd37a,
+          emissive: 0xffc65f,
+          emissiveIntensity: 1.25,
+          roughness: 0.22,
+          metalness: 0.18
+        })
+      );
+      currentPointMesh.position.set(cp.x, cp.y, cp.z);
+      root.add(currentPointMesh);
+
+      if (showOrbit && encodedTrail.length >= 2) {
+        orbitMesh = createOrbit(encodedTrail);
+        root.add(orbitMesh);
+      } else {
+        orbitMesh = null;
+      }
+
+      $("memberCount").textContent = members.length.toLocaleString();
+      controls.target.set(0, 0, 0);
+    }
+
+    // ---------- Embedding ----------
+    function updateEmbedding(resetTrail) {
+      const q = Math.max(2, Math.min(97, parseIntSafe($("q"), 11)));
+      const chunkBits = Math.max(2, Math.min(16, parseIntSafe($("chunkBits"), 6)));
+      const width = currentRow.length;
+
+      const chunkStrings = [];
+      const rawValues = [];
+      const residues = [];
+
+      const start = chunkStartIndex(width, chunkBits);
+      for (let i = 0; i < 6; i++) {
+        const bits = extractChunkBits(currentRow, start + i * chunkBits, chunkBits);
+        chunkStrings.push(bits);
+        const raw = bitsToInt(bits);
+        rawValues.push(raw);
+        residues.push(mod(raw, q));
+      }
+
+      let a = residues.slice(0, 3);
+      let p = residues.slice(3, 6);
+
+      if (a[0] === 0 && a[1] === 0 && a[2] === 0) a = [1, 0, 0];
+
+      const residueDot = mod(a[0]*p[0] + a[1]*p[1] + a[2]*p[2], q);
+      const isMember = residueDot === 0;
+
+      const radius = Math.max(4, Math.min(16, parseIntSafe($("radius"), 8)));
+      const trailPoint = {
+        x: centeredCoord(p[0], q, radius),
+        y: centeredCoord(p[1], q, radius),
+        z: centeredCoord(p[2], q, radius)
+      };
+      if (resetTrail) encodedTrail.length = 0;
+      encodedTrail.push(trailPoint);
+
+      const membershipHTML = isMember
+        ? `<span class="pill ok">member</span>`
+        : `<span class="pill bad">off lattice</span>`;
+
+      $("membership").innerHTML = membershipHTML;
+      $("pointCoords").textContent = `(${p[0]}, ${p[1]}, ${p[2]})`;
+
+      $("equation").innerHTML =
+        `Current row is chunked into six blocks of ${chunkBits} bits.<br>` +
+        `a = (${a.join(", ")}) and p = (${p.join(", ")}) in Z<sub>${q}</sub><sup>3</sup><br>` +
+        `L<sub>t</sub> = { y ∈ Z³ : ${a[0]}y₁ + ${a[1]}y₂ + ${a[2]}y₃ ≡ 0 (mod ${q}) }<br>` +
+        `Encoded point test: ${a[0]}·${p[0]} + ${a[1]}·${p[1]} + ${a[2]}·${p[2]} ≡ ${residueDot} (mod ${q})`;
+
+      $("chunkInfo").textContent =
+        `generation = ${generation}\n` +
+        `row bits = ${currentRow.join("")}\n\n` +
+        `chunks:\n` +
+        `A1 = ${chunkStrings[0]}  -> ${rawValues[0]} mod ${q} = ${a[0]}\n` +
+        `A2 = ${chunkStrings[1]}  -> ${rawValues[1]} mod ${q} = ${a[1]}\n` +
+        `A3 = ${chunkStrings[2]}  -> ${rawValues[2]} mod ${q} = ${a[2]}\n` +
+        `P1 = ${chunkStrings[3]}  -> ${rawValues[3]} mod ${q} = ${p[0]}\n` +
+        `P2 = ${chunkStrings[4]}  -> ${rawValues[4]} mod ${q} = ${p[1]}\n` +
+        `P3 = ${chunkStrings[5]}  -> ${rawValues[5]} mod ${q} = ${p[2]}\n\n` +
+        `a · p mod q = ${residueDot}\n` +
+        `membership = ${isMember ? "yes" : "no"}\n` +
+        `${6 * chunkBits > width ? "\n(note: chunk extraction wraps cyclically around the row)" : ""}`;
+
+      updateThreeView({
+        a,
+        q,
+        encodedPointResidues: p
+      });
+    }
+
+    // ---------- UI ----------
+    $("radius").addEventListener("input", () => {
+      $("radiusValue").textContent = $("radius").value;
+      updateEmbedding(true);
+    });
+    $("pointSize").addEventListener("input", () => {
+      $("pointSizeValue").textContent = Number($("pointSize").value).toFixed(2);
+      updateEmbedding(true);
+    });
+    $("autoRotate").addEventListener("change", () => {
+      controls.autoRotate = $("autoRotate").checked;
+    });
+    $("showRejected").addEventListener("change", () => updateEmbedding(true));
+    $("showOrbit").addEventListener("change", () => updateEmbedding(false));
+    $("showSlices").addEventListener("change", () => updateEmbedding(false));
+
+    $("playPause").addEventListener("click", () => {
+      running = !running;
+      $("playPause").textContent = running ? "Pause" : "Play";
+    });
+    $("step").addEventListener("click", () => {
+      stepCA();
+    });
+    $("reset").addEventListener("click", () => {
+      initializeCA();
+    });
+
+    ["rule", "width", "seedMode", "speed", "q", "chunkBits"].forEach(id => {
+      $(id).addEventListener("change", () => {
+        if (id === "rule" || id === "speed") {
+          if (id === "rule") updateEmbedding(false);
+          drawCA();
+        } else {
+          initializeCA();
+        }
+      });
+    });
+
+    function resizeThree() {
+      const rect = threePane.getBoundingClientRect();
+      const width = Math.max(10, Math.floor(rect.width));
+      const height = Math.max(10, Math.floor(rect.height));
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener("resize", () => {
+      drawCA();
+      resizeThree();
+    });
+
+    // ---------- Animation ----------
+    const clock = new THREE.Clock();
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      const speed = Math.max(1, Math.min(60, parseIntSafe($("speed"), 10)));
+      const interval = 1000 / speed;
+      if (running && now - lastStep >= interval) {
+        stepCA();
+        lastStep = now;
+      }
+
+      stars.rotation.y = t * 0.006;
+      stars.rotation.x = Math.sin(t * 0.04) * 0.03;
+
+      if (currentPointMesh) {
+        const s = 1.0 + 0.12 * Math.sin(t * 3.4);
+        currentPointMesh.scale.setScalar(s);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    initializeCA();
+    resizeThree();
+    animate(0);
+
+    requestAnimationFrame(() => {
+      $("loading").style.opacity = "0";
+      setTimeout(() => $("loading").remove(), 320);
+    });
+  </script>
+</body>
+</html>
