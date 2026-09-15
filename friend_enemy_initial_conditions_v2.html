@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Friend / Enemy Dot Simulation — Initial Condition Lab v2</title>
+<style>
+  :root { color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #080808;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  #wrap {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    background: #080808;
+  }
+
+  #caption {
+    padding: 12px 18px 5px;
+    color: #f2f2f2;
+    font-size: clamp(13px, 1.35vw, 19px);
+    line-height: 1.25;
+  }
+
+  #toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 7px 18px 11px;
+    align-items: center;
+  }
+
+  label {
+    font-size: 12px;
+    color: #aaa;
+  }
+
+  select, input, button {
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #171717;
+    color: #eee;
+    font: inherit;
+    padding: 7px 9px;
+  }
+
+  select, input { font-size: 13px; }
+  select { max-width: 250px; }
+  button { cursor: pointer; font-size: 13px; }
+  button:hover { background: #252525; }
+
+  .control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #stage {
+    position: relative;
+    min-height: 0;
+    margin: 0 18px 18px;
+    border-radius: 24px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #fff;
+  }
+
+  #stats {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    min-width: 182px;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.86);
+    color: #111;
+    font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    backdrop-filter: blur(5px);
+    user-select: none;
+    white-space: pre;
+  }
+
+  #legend {
+    position: absolute;
+    left: 12px;
+    bottom: 10px;
+    font-size: 11px;
+    color: rgba(0,0,0,.46);
+    user-select: none;
+  }
+
+  @media (max-width: 760px) {
+    #toolbar { padding-left: 10px; padding-right: 10px; }
+    #caption { padding-left: 10px; padding-right: 10px; }
+    #stage { margin: 0 7px 7px; border-radius: 17px; }
+    #stats { display: none; }
+    select { max-width: 185px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="caption">
+    Same dynamics, many more starting geometries. The seed fixes both the positional jitter
+    and the initial friend/enemy graph, so presets can be compared reproducibly.
+  </div>
+
+  <div id="toolbar">
+    <div class="control">
+      <label for="preset">initial condition</label>
+      <select id="preset">
+        <optgroup label="Random / blobs">
+          <option value="uniform">uniform random</option>
+          <option value="center">tight center Gaussian</option>
+          <option value="disk">filled disk</option>
+          <option value="annulus">thick annulus</option>
+          <option value="two">two horizontal blobs</option>
+          <option value="twoVertical">two vertical blobs</option>
+          <option value="three">three blobs / triangle</option>
+          <option value="four">four corner blobs</option>
+          <option value="five">four corners + center</option>
+          <option value="clusters">random Gaussian clusters</option>
+          <option value="outlier">center blob + one outlier</option>
+        </optgroup>
+
+        <optgroup label="Curves">
+          <option value="ring">thin ring</option>
+          <option value="doubleRing">double ring</option>
+          <option value="spiral">Archimedean spiral</option>
+          <option value="doubleSpiral">double spiral</option>
+          <option value="sine">sine wave</option>
+          <option value="lissajous">Lissajous curve</option>
+          <option value="flower">five-petal flower</option>
+          <option value="crescent">crescent</option>
+        </optgroup>
+
+        <optgroup label="Lines / shapes">
+          <option value="line">horizontal line</option>
+          <option value="verticalLine">vertical line</option>
+          <option value="diagonal">diagonal line</option>
+          <option value="xshape">X</option>
+          <option value="cross">cross</option>
+          <option value="square">square outline</option>
+          <option value="triangleOutline">triangle outline</option>
+          <option value="edges">edge frame</option>
+          <option value="spokes">radial spokes</option>
+        </optgroup>
+
+        <optgroup label="Regular structures">
+          <option value="grid">grid</option>
+          <option value="checker">checkerboard blocks</option>
+          <option value="hex">hexagonal lattice</option>
+          <option value="polarGrid">polar rings + spokes</option>
+        </optgroup>
+
+        <optgroup label="Asymmetric / extreme">
+          <option value="leftHalf">left-half uniform</option>
+          <option value="topStrip">thin top strip</option>
+          <option value="corner">single corner blob</option>
+          <option value="twoUnequal">two unequal blobs</option>
+          <option value="gradient">left-to-right density gradient</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="seed">seed</label>
+      <input id="seed" type="number" value="12345" step="1" style="width:105px">
+    </div>
+
+    <button id="restart">Restart</button>
+    <button id="randomSeed">New seed</button>
+    <button id="pause">Pause</button>
+  </div>
+
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="stats"></div>
+    <div id="legend">Click the floor to reassign one random dot's friend + enemy.</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const presetEl = document.getElementById("preset");
+  const seedEl = document.getElementById("seed");
+  const statsEl = document.getElementById("stats");
+
+  const DOT_COUNT = 650;
+  const CENTER_PULL = 0.005;
+  const FRIEND_PULL = 0.020;
+  const ENEMY_PUSH = 0.0060;
+  const STEP_HZ = 60;
+
+  let dots = [];
+  let running = true;
+  let rng = Math.random;
+  let simSteps = 0;
+  let lastTime = performance.now();
+  let accumulator = 0;
+
+  function mulberry32(seed) {
+    return function() {
+      let t = seed += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function gauss() {
+    let u = 0, v = 0;
+    while (!u) u = rng();
+    while (!v) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function clamp01(x) {
+    return Math.max(0.001, Math.min(0.999, x));
+  }
+
+  function jitter(scale=0.004) {
+    return gauss() * scale;
+  }
+
+  function pointOnSegment(a, b, t) {
+    return [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t];
+  }
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function positionForPreset(name, i) {
+    const q = i / Math.max(1, DOT_COUNT - 1);
+    const theta = q * Math.PI * 2;
+
+    if (name === "center") {
+      return [
+        clamp01(0.5 + gauss() * 0.055),
+        clamp01(0.5 + gauss() * 0.055)
+      ];
+    }
+
+    if (name === "disk") {
+      const a = rng() * Math.PI * 2;
+      const r = 0.31 * Math.sqrt(rng());
+      return [0.5 + Math.cos(a)*r, 0.5 + Math.sin(a)*r];
+    }
+
+    if (name === "annulus") {
+      const a = rng() * Math.PI * 2;
+      const r = 0.23 + rng() * 0.10;
+      return [0.5 + Math.cos(a)*r, 0.5 + Math.sin(a)*r];
+    }
+
+    if (name === "two") {
+      const left = i < DOT_COUNT / 2;
+      return [
+        clamp01((left ? 0.30 : 0.70) + gauss() * 0.055),
+        clamp01(0.5 + gauss() * 0.085)
+      ];
+    }
+
+    if (name === "twoVertical") {
+      const top = i < DOT_COUNT / 2;
+      return [
+        clamp01(0.5 + gauss() * 0.085),
+        clamp01((top ? 0.30 : 0.70) + gauss() * 0.055)
+      ];
+    }
+
+    if (name === "three") {
+      const cs = [[0.50,0.22],[0.26,0.70],[0.74,0.70]];
+      const c = cs[i % 3];
+      return [clamp01(c[0] + gauss()*0.045), clamp01(c[1] + gauss()*0.045)];
+    }
+
+    if (name === "four") {
+      const cs = [[0.27,0.27],[0.73,0.27],[0.27,0.73],[0.73,0.73]];
+      const c = cs[i % 4];
+      return [clamp01(c[0] + gauss()*0.045), clamp01(c[1] + gauss()*0.045)];
+    }
+
+    if (name === "five") {
+      const cs = [[0.23,0.23],[0.77,0.23],[0.23,0.77],[0.77,0.77],[0.5,0.5]];
+      const c = cs[i % 5];
+      return [clamp01(c[0] + gauss()*0.037), clamp01(c[1] + gauss()*0.037)];
+    }
+
+    if (name === "clusters") {
+      const cs = [[0.18,0.31],[0.36,0.70],[0.54,0.34],[0.73,0.68],[0.84,0.24],[0.58,0.84]];
+      const c = cs[(rng()*cs.length)|0];
+      const s = 0.025 + rng()*0.035;
+      return [clamp01(c[0] + gauss()*s), clamp01(c[1] + gauss()*s)];
+    }
+
+    if (name === "outlier") {
+      if (i === 0) return [0.92,0.12];
+      return [clamp01(0.5 + gauss()*0.052), clamp01(0.5 + gauss()*0.052)];
+    }
+
+    if (name === "ring") {
+      const a = theta + jitter(0.02);
+      const r = 0.31 + jitter(0.010);
+      return [clamp01(0.5 + Math.cos(a)*r), clamp01(0.5 + Math.sin(a)*r)];
+    }
+
+    if (name === "doubleRing") {
+      const r = (i % 2 === 0 ? 0.20 : 0.34) + jitter(0.008);
+      const a = theta*2 + jitter(0.015);
+      return [clamp01(0.5 + Math.cos(a)*r), clamp01(0.5 + Math.sin(a)*r)];
+    }
+
+    if (name === "spiral") {
+      const turns = 3.6;
+      const a = q * Math.PI * 2 * turns;
+      const r = 0.025 + 0.34*q;
+      return [clamp01(0.5 + Math.cos(a)*r + jitter(0.004)),
+              clamp01(0.5 + Math.sin(a)*r + jitter(0.004))];
+    }
+
+    if (name === "doubleSpiral") {
+      const arm = i % 2;
+      const t = Math.floor(i/2) / Math.max(1, Math.floor(DOT_COUNT/2)-1);
+      const a = t * Math.PI * 2 * 3.0 + arm*Math.PI;
+      const r = 0.03 + 0.34*t;
+      return [clamp01(0.5 + Math.cos(a)*r + jitter(0.004)),
+              clamp01(0.5 + Math.sin(a)*r + jitter(0.004))];
+    }
+
+    if (name === "sine") {
+      const x = 0.07 + 0.86*q;
+      const y = 0.5 + 0.24*Math.sin(q*Math.PI*4);
+      return [clamp01(x+jitter(0.003)), clamp01(y+jitter(0.004))];
+    }
+
+    if (name === "lissajous") {
+      const a = theta;
+      return [
+        clamp01(0.5 + 0.34*Math.sin(3*a + Math.PI/2) + jitter(0.003)),
+        clamp01(0.5 + 0.30*Math.sin(4*a) + jitter(0.003))
+      ];
+    }
+
+    if (name === "flower") {
+      const a = theta;
+      const r = 0.23 + 0.095*Math.cos(5*a);
+      return [clamp01(0.5 + r*Math.cos(a) + jitter(0.003)),
+              clamp01(0.5 + r*Math.sin(a) + jitter(0.003))];
+    }
+
+    if (name === "crescent") {
+      const a = (rng()*1.55 - 0.775)*Math.PI;
+      const outer = 0.30;
+      const thickness = 0.06 + rng()*0.075;
+      const r = outer - thickness*rng();
+      const x = 0.48 + Math.cos(a)*r;
+      const y = 0.5 + Math.sin(a)*r;
+      return [clamp01(x), clamp01(y)];
+    }
+
+    if (name === "line") {
+      return [0.07 + 0.86*q, clamp01(0.5 + jitter(0.006))];
+    }
+
+    if (name === "verticalLine") {
+      return [clamp01(0.5 + jitter(0.006)), 0.07 + 0.86*q];
+    }
+
+    if (name === "diagonal") {
+      return [0.08 + 0.84*q + jitter(0.004), 0.08 + 0.84*q + jitter(0.004)];
+    }
+
+    if (name === "xshape") {
+      const t = (Math.floor(i/2)) / Math.max(1, Math.floor(DOT_COUNT/2)-1);
+      const x = 0.08 + 0.84*t;
+      const y = (i%2===0 ? x : 1-x);
+      return [clamp01(x+jitter(0.003)), clamp01(y+jitter(0.003))];
+    }
+
+    if (name === "cross") {
+      const t = (Math.floor(i/2)) / Math.max(1, Math.floor(DOT_COUNT/2)-1);
+      if (i%2===0) return [0.08+0.84*t, clamp01(0.5+jitter(0.004))];
+      return [clamp01(0.5+jitter(0.004)), 0.08+0.84*t];
+    }
+
+    if (name === "square") {
+      const p = q*4;
+      const side = Math.min(3, Math.floor(p));
+      const t = p-side;
+      const v = 0.18, w = 0.82;
+      let pt;
+      if (side===0) pt=[v+(w-v)*t,v];
+      else if (side===1) pt=[w,v+(w-v)*t];
+      else if (side===2) pt=[w-(w-v)*t,w];
+      else pt=[v,w-(w-v)*t];
+      return [clamp01(pt[0]+jitter(0.003)), clamp01(pt[1]+jitter(0.003))];
+    }
+
+    if (name === "triangleOutline") {
+      const A=[0.5,0.14], B=[0.15,0.82], C=[0.85,0.82];
+      const p=q*3;
+      const side=Math.min(2,Math.floor(p));
+      const t=p-side;
+      let pt = side===0 ? pointOnSegment(A,B,t)
+             : side===1 ? pointOnSegment(B,C,t)
+                        : pointOnSegment(C,A,t);
+      return [clamp01(pt[0]+jitter(0.003)), clamp01(pt[1]+jitter(0.003))];
+    }
+
+    if (name === "edges") {
+      const side = i % 4;
+      const t = rng()*0.88 + 0.06;
+      if (side===0) return [t,0.06];
+      if (side===1) return [0.94,t];
+      if (side===2) return [t,0.94];
+      return [0.06,t];
+    }
+
+    if (name === "spokes") {
+      const spokes = 12;
+      const spoke = i % spokes;
+      const a = spoke/spokes * Math.PI*2;
+      const r = 0.03 + 0.37 * rng();
+      return [clamp01(0.5+Math.cos(a)*r+jitter(0.002)),
+              clamp01(0.5+Math.sin(a)*r+jitter(0.002))];
+    }
+
+    if (name === "grid") {
+      const cols = Math.ceil(Math.sqrt(DOT_COUNT));
+      const rows = Math.ceil(DOT_COUNT/cols);
+      const x=(i%cols+0.5)/cols;
+      const y=(Math.floor(i/cols)+0.5)/rows;
+      return [clamp01(x+jitter(0.0025)), clamp01(y+jitter(0.0025))];
+    }
+
+    if (name === "checker") {
+      const cells = 8;
+      const filled=[];
+      for (let y=0;y<cells;y++) for (let x=0;x<cells;x++)
+        if ((x+y)%2===0) filled.push([x,y]);
+      const c=filled[i%filled.length];
+      return [
+        clamp01((c[0]+0.15+0.7*rng())/cells),
+        clamp01((c[1]+0.15+0.7*rng())/cells)
+      ];
+    }
+
+    if (name === "hex") {
+      const cols=26;
+      const rows=Math.ceil(DOT_COUNT/cols);
+      const row=Math.floor(i/cols);
+      const col=i%cols;
+      const x=0.06 + 0.88*(col + 0.5*(row%2))/cols;
+      const y=0.07 + 0.86*row/Math.max(1,rows-1);
+      return [clamp01(x+jitter(0.0018)),clamp01(y+jitter(0.0018))];
+    }
+
+    if (name === "polarGrid") {
+      const rings=7, spokes=18;
+      const ring=1+(i%rings);
+      const spoke=Math.floor(i/rings)%spokes;
+      const a=spoke/spokes*Math.PI*2;
+      const r=0.045 + ring/rings*0.33;
+      return [clamp01(0.5+Math.cos(a)*r+jitter(0.002)),
+              clamp01(0.5+Math.sin(a)*r+jitter(0.002))];
+    }
+
+    if (name === "leftHalf") {
+      return [0.03 + rng()*0.44, 0.03 + rng()*0.94];
+    }
+
+    if (name === "topStrip") {
+      return [0.04+rng()*0.92, clamp01(0.16+gauss()*0.025)];
+    }
+
+    if (name === "corner") {
+      return [clamp01(0.16+gauss()*0.055), clamp01(0.16+gauss()*0.055)];
+    }
+
+    if (name === "twoUnequal") {
+      const big = i < DOT_COUNT*0.82;
+      const c = big ? [0.36,0.53] : [0.78,0.30];
+      const s = big ? 0.075 : 0.035;
+      return [clamp01(c[0]+gauss()*s),clamp01(c[1]+gauss()*s)];
+    }
+
+    if (name === "gradient") {
+      // p(x) proportional to x: inverse CDF sqrt(U)
+      const x = 0.04 + 0.92*Math.sqrt(rng());
+      const y = 0.04 + 0.92*rng();
+      return [x,y];
+    }
+
+    // uniform random
+    return [rng(),rng()];
+  }
+
+  function randomOther(i, avoid=-1) {
+    let j;
+    do { j = (rng()*dots.length)|0; }
+    while (j===i || j===avoid);
+    return j;
+  }
+
+  function reset() {
+    let seed=Number(seedEl.value);
+    if (!Number.isFinite(seed)) seed=12345;
+    rng=mulberry32(seed>>>0);
+    simSteps=0;
+
+    const preset=presetEl.value;
+    dots=Array.from({length:DOT_COUNT},(_,i)=>{
+      const [x,y]=positionForPreset(preset,i);
+      return {x,y,friend:0,enemy:0,size:0.75+rng()*1.2};
+    });
+
+    for (let i=0;i<dots.length;i++) {
+      dots[i].friend=randomOther(i);
+      dots[i].enemy=randomOther(i,dots[i].friend);
+    }
+  }
+
+  function reassignOne() {
+    const i=(rng()*dots.length)|0;
+    dots[i].friend=randomOther(i);
+    dots[i].enemy=randomOther(i,dots[i].friend);
+  }
+
+  function step() {
+    const old=dots.map(d=>[d.x,d.y]);
+
+    for (let i=0;i<dots.length;i++) {
+      const d=dots[i];
+      const [x,y]=old[i];
+      const [fx,fy]=old[d.friend];
+      const [ex,ey]=old[d.enemy];
+
+      d.x = x
+        + CENTER_PULL*(0.5-x)
+        + FRIEND_PULL*(fx-x)
+        + ENEMY_PUSH*(x-ex);
+
+      d.y = y
+        + CENTER_PULL*(0.5-y)
+        + FRIEND_PULL*(fy-y)
+        + ENEMY_PUSH*(y-ey);
+
+      if (d.x<0) d.x=-d.x;
+      if (d.x>1) d.x=2-d.x;
+      if (d.y<0) d.y=-d.y;
+      if (d.y>1) d.y=2-d.y;
+    }
+
+    if (rng()<1/21) reassignOne();
+    simSteps++;
+  }
+
+  function metrics() {
+    let mx=0,my=0;
+    for (const d of dots) { mx+=d.x; my+=d.y; }
+    mx/=dots.length; my/=dots.length;
+
+    let variance=0,maxR=0;
+    for (const d of dots) {
+      const dx=d.x-mx, dy=d.y-my;
+      const r2=dx*dx+dy*dy;
+      variance+=r2;
+      maxR=Math.max(maxR,Math.sqrt(r2));
+    }
+    variance/=dots.length;
+    return {cx:mx,cy:my,rms:Math.sqrt(variance),maxR};
+  }
+
+  function draw() {
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    ctx.fillStyle="#fff";
+    ctx.fillRect(0,0,w,h);
+
+    ctx.fillStyle="rgba(0,0,0,0.84)";
+    ctx.beginPath();
+    for (const d of dots) {
+      const x=d.x*w,y=d.y*h,r=d.size;
+      ctx.moveTo(x+r,y);
+      ctx.arc(x,y,r,0,Math.PI*2);
+    }
+    ctx.fill();
+
+    const m=metrics();
+    statsEl.textContent =
+      `preset  ${presetEl.options[presetEl.selectedIndex].text}\n`+
+      `seed    ${seedEl.value}\n`+
+      `step    ${simSteps}\n`+
+      `center  (${m.cx.toFixed(3)}, ${m.cy.toFixed(3)})\n`+
+      `spread  ${m.rms.toFixed(3)} rms\n`+
+      `radius  ${m.maxR.toFixed(3)} max`;
+  }
+
+  function frame(now) {
+    const dt=Math.min(100,now-lastTime);
+    lastTime=now;
+
+    if (running) {
+      accumulator+=dt;
+      const stepMs=1000/STEP_HZ;
+      while (accumulator>=stepMs) {
+        step();
+        accumulator-=stepMs;
+      }
+    }
+
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  document.getElementById("pause").addEventListener("click",e=>{
+    running=!running;
+    e.currentTarget.textContent=running?"Pause":"Resume";
+  });
+
+  document.getElementById("restart").addEventListener("click",reset);
+
+  document.getElementById("randomSeed").addEventListener("click",()=>{
+    seedEl.value=Math.floor(Math.random()*2**31);
+    reset();
+  });
+
+  presetEl.addEventListener("change",reset);
+  seedEl.addEventListener("change",reset);
+  canvas.addEventListener("click",reassignOne);
+  window.addEventListener("resize",resize);
+
+  resize();
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
